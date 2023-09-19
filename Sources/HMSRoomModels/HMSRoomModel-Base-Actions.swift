@@ -453,5 +453,60 @@ extension HMSRoomModel {
         }
 #endif
     }
+
+#if !Preview
+    public func getIterator(for roleName: String) -> HMSObservablePeerListIterator {
+        if let cached = iteratorCache[roleName] {
+            return cached
+        }
+        let iterator = HMSObservablePeerListIterator(iterator: sdk.getPeerListIterator(options: HMSPeerListIteratorOptions(filterByRoleName: roleName, limit: 10))) { [weak self] inPeer in
+            HMSPeerModel(peer: inPeer, roomModel: self)
+        }
+
+        iteratorCache[roleName] = iterator
+        return iterator
+    }
+#endif
     
 }
+
+
+#if !Preview
+public class HMSObservablePeerListIterator: ObservableObject {
+    @Published public private(set) var peers: [HMSPeerModel]
+    @Published public private(set) var hasNext: Bool
+    @Published public private(set) var isLoading: Bool
+    
+    private var iterator: HMSPeerListIterator
+    private var modelBuilder: ((HMSPeer) -> HMSPeerModel)
+    
+    init(iterator: HMSPeerListIterator, modelBuilder: @escaping ((HMSPeer) -> HMSPeerModel)) {
+        self.peers = []
+        self.hasNext = true
+        self.isLoading = false
+        self.modelBuilder = modelBuilder
+        self.iterator = iterator
+    }
+    
+    public func loadNext() async throws {
+        isLoading = true
+        return try await withCheckedThrowingContinuation { continuation in
+            iterator.next() { [weak self] newPeers, error in
+                guard let self = self else { return }
+                if let error = error {
+                    self.isLoading = false
+                    continuation.resume(throwing: error)
+                } else {
+                    if let newPeers = newPeers {
+                        let newModels = newPeers.map { self.modelBuilder($0) }
+                        self.peers.append(contentsOf: newModels)
+                    }
+                    self.hasNext = iterator.hasNext
+                    self.isLoading = false
+                    continuation.resume()
+                }
+            }
+        }
+    }
+}
+#endif
