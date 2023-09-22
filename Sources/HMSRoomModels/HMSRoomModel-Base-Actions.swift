@@ -456,14 +456,9 @@ extension HMSRoomModel {
 
 #if !Preview
     public func getIterator(for roleName: String) -> HMSObservablePeerListIterator {
-        if let cached = iteratorCache[roleName] {
-            return cached
-        }
         let iterator = HMSObservablePeerListIterator(iterator: sdk.getPeerListIterator(options: HMSPeerListIteratorOptions(filterByRoleName: roleName, limit: 10))) { [weak self] inPeer in
             HMSPeerModel(peer: inPeer, roomModel: self)
         }
-
-        iteratorCache[roleName] = iterator
         return iterator
     }
 #endif
@@ -476,6 +471,10 @@ public class HMSObservablePeerListIterator: ObservableObject {
     @Published public private(set) var peers: [HMSPeerModel]
     @Published public private(set) var hasNext: Bool
     @Published public private(set) var isLoading: Bool
+
+    public var options: HMSPeerListIteratorOptions {
+        iterator.options
+    }
     
     private var iterator: HMSPeerListIterator
     private var modelBuilder: ((HMSPeer) -> HMSPeerModel)

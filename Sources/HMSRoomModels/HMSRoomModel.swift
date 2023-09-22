@@ -112,10 +112,6 @@ public class HMSRoomModel: ObservableObject {
     let sdk: HMSSDK
     var room: HMSRoom? = nil
     
-#if !Preview
-    var iteratorCache = [String: HMSObservablePeerListIterator]()
-#endif
-    
     // Room states
     @Published public var hlsVariants = [HMSHLSVariant]()
     // Requests and notifications
@@ -167,10 +163,6 @@ public class HMSRoomModel: ObservableObject {
     }
     
 #if !Preview
-    public func resetIteratorCache() {
-        iteratorCache = [:]
-    }
-    
     private func resetAllPeerAndRoomStates() {
         
         peerModels.removeAll()
@@ -213,8 +205,6 @@ public class HMSRoomModel: ObservableObject {
         sessionStore = nil
         sharedStore = nil
         sharedSessionStore.cleanup()
-        
-        resetIteratorCache()
         
         inMemoryStore.removeAll()
     }
