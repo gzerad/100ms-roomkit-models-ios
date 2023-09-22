@@ -467,7 +467,8 @@ extension HMSRoomModel {
 
 
 #if !Preview
-public class HMSObservablePeerListIterator: ObservableObject {
+@MainActor
+public final class HMSObservablePeerListIterator: ObservableObject {
     @Published public private(set) var peers: [HMSPeerModel]
     @Published public private(set) var hasNext: Bool
     @Published public private(set) var isLoading: Bool
