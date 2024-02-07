@@ -42,7 +42,16 @@ class AVPlayerModel {
     weak var currentAVPlayerInstance: AVPlayerViewController?
 }
 
+public struct HMSPlayerConstants {
+    static let seekBarPadding: CGFloat = 4
+    
+    public static func preferredHeight(for width: CGFloat) -> CGFloat {
+        return (width * 9) / 16 + HMSPlayerConstants.seekBarPadding
+    }
+}
+
 public struct HMSHLSPlayerView<VideoOverlay> : View where VideoOverlay : View {
+
     
     class Coordinator: HMSHLSPlayerDelegate, ObservableObject {
         
@@ -125,124 +134,124 @@ public struct HMSHLSPlayerView<VideoOverlay> : View where VideoOverlay : View {
     }
     
     func videoView(url: URL) -> some View {
-        GeometryReader { geo in
-            
-            ZStack {
-                VideoPlayer(player: coordinator.player._nativePlayer)
-                    .introspect(.videoPlayer, on: .iOS(.v14, .v15, .v16, .v17)) {
-                        $0.showsPlaybackControls = false
-                        $0.allowsPictureInPicturePlayback = false
-                        $0.canStartPictureInPictureAutomaticallyFromInline = false
-                        AVPlayerModel.shared.currentAVPlayerInstance = $0
-                    }
-                    .frame(width: geo.size.width, height: geo.size.height )
-                    .scaleEffect(scale)
-                    .frame(width: geo.size.width * scale, height: geo.size.height * scale)
-                    .offset(x: currentOffset.width + dragOffset.width, y: currentOffset.height + dragOffset.height)
-                    .onAppear() {
-                        let task = Task {
-                            try await Task.sleep(nanoseconds: 3_000_000_000)
-                            hlsPlayerPreferences.isControlsHidden.wrappedValue = true
+        VStack {
+            GeometryReader { geo in
+                ZStack {
+                    VideoPlayer(player: coordinator.player._nativePlayer)
+                        .introspect(.videoPlayer, on: .iOS(.v14, .v15, .v16, .v17)) {
+                            $0.showsPlaybackControls = false
+                            $0.allowsPictureInPicturePlayback = false
+                            $0.canStartPictureInPictureAutomaticallyFromInline = false
+                            AVPlayerModel.shared.currentAVPlayerInstance = $0
                         }
-                        hideTasks.append(task)
-                        
-                        hlsPlayerPreferences.resetHideTask.wrappedValue = {
+                        .frame(width: geo.size.width, height: geo.size.height )
+                        .scaleEffect(scale)
+                        .frame(width: geo.size.width * scale, height: geo.size.height * scale)
+                        .offset(x: currentOffset.width + dragOffset.width, y: currentOffset.height + dragOffset.height)
+                        .onAppear() {
+                            let task = Task {
+                                try await Task.sleep(nanoseconds: 3_000_000_000)
+                                hlsPlayerPreferences.isControlsHidden.wrappedValue = true
+                            }
+                            hideTasks.append(task)
+                            
+                            hlsPlayerPreferences.resetHideTask.wrappedValue = {
+                                hideTasks.forEach{$0.cancel()}
+                                hideTasks.removeAll()
+                                
+                                let task = Task {
+                                    try await Task.sleep(nanoseconds: 3_000_000_000)
+                                    hlsPlayerPreferences.isControlsHidden.wrappedValue = true
+                                }
+                                hideTasks.append(task)
+                            }
+                        }
+                        .onChange(of: hlsPlayerPreferences.isControlsHidden.wrappedValue) { isControlsHidden in
+                            
                             hideTasks.forEach{$0.cancel()}
                             hideTasks.removeAll()
                             
-                            let task = Task {
-                                try await Task.sleep(nanoseconds: 3_000_000_000)
-                                hlsPlayerPreferences.isControlsHidden.wrappedValue = true
+                            if !isControlsHidden {
+                                let task = Task {
+                                    try await Task.sleep(nanoseconds: 3_000_000_000)
+                                    hlsPlayerPreferences.isControlsHidden.wrappedValue = true
+                                }
+                                hideTasks.append(task)
                             }
-                            hideTasks.append(task)
                         }
-                    }
-                    .onChange(of: hlsPlayerPreferences.isControlsHidden.wrappedValue) { isControlsHidden in
-                        
-                        hideTasks.forEach{$0.cancel()}
-                        hideTasks.removeAll()
-                        
-                        if !isControlsHidden {
-                            let task = Task {
-                                try await Task.sleep(nanoseconds: 3_000_000_000)
-                                hlsPlayerPreferences.isControlsHidden.wrappedValue = true
-                            }
-                            hideTasks.append(task)
-                        }
-                    }
-                    .overlay(content: {
-                        Color.black.opacity(0.001)
-                            .onTapGesture {
-                                hlsPlayerPreferences.isControlsHidden.wrappedValue.toggle()
-                                
-                                if !hlsPlayerPreferences.isControlsHidden.wrappedValue {
-                                    let task = Task {
-                                        try await Task.sleep(nanoseconds: 3_000_000_000)
-                                        hlsPlayerPreferences.isControlsHidden.wrappedValue = true
+                        .overlay(content: {
+                            Color.black.opacity(0.001)
+                                .onTapGesture {
+                                    hlsPlayerPreferences.isControlsHidden.wrappedValue.toggle()
+                                    
+                                    if !hlsPlayerPreferences.isControlsHidden.wrappedValue {
+                                        let task = Task {
+                                            try await Task.sleep(nanoseconds: 3_000_000_000)
+                                            hlsPlayerPreferences.isControlsHidden.wrappedValue = true
+                                        }
+                                        hideTasks.append(task)
                                     }
-                                    hideTasks.append(task)
-                                }
-                                else {
-                                    hideTasks.forEach{$0.cancel()}
-                                    hideTasks.removeAll()
-                                }
-                                
-                                // hide keyboard it it's present
-                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                            }
-                            .gesture(MagnificationGesture().onChanged { val in
-                                let delta = val / self.lastScaleValue
-                                self.lastScaleValue = val
-                                var newScale = self.scale * delta
-                                if newScale < 1.0 {
-                                    newScale =  1.0
-                                }
-                                scale = newScale
-
-                                dragChanged(value: nil, geo: geo)
-                            }.onEnded{val in
-                                lastScaleValue = 1
-                            })
-                            .simultaneousGesture(
-                                DragGesture()
-                                    .onChanged { value in
-                                        
-                                        dragChanged(value: value, geo: geo)
+                                    else {
+                                        hideTasks.forEach{$0.cancel()}
+                                        hideTasks.removeAll()
                                     }
-                                    .onEnded { value in
-                                        
-                                        let maxDragDistanceX = geo.size.width * scale - geo.size.width
-                                        let maxDragDistanceY = geo.size.height * scale - geo.size.height
-                                        
-                                        // Update the current offset within constraints and reset drag offset
-                                        currentOffset.width = max(min(currentOffset.width + dragOffset.width, maxDragDistanceX), -maxDragDistanceX)
-                                        currentOffset.height = max(min(currentOffset.height + dragOffset.height, maxDragDistanceY), -maxDragDistanceY)
-                                        
-                                        dragOffset = CGSize.zero
+                                    
+                                    // hide keyboard it it's present
+                                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                                }
+                                .gesture(MagnificationGesture().onChanged { val in
+                                    let delta = val / self.lastScaleValue
+                                    self.lastScaleValue = val
+                                    var newScale = self.scale * delta
+                                    if newScale < 1.0 {
+                                        newScale =  1.0
                                     }
-                            )
-                    })
-                
-                
-            }
-        }
-        .overlay(content: {
-            videoOverlay?(coordinator.player)
-        })
-        .onAppear() {
-            coordinator.player.play(url)
-        }
-        .onDisappear() {
-            coordinator.player.stop()
-        }
-        
-        .onChange(of: roomModel.hlsVariants) { variant in
-            if self.url == nil {
-                if let url = variant.first?.url {
-                    coordinator.player.play(url)
+                                    scale = newScale
+                                    
+                                    dragChanged(value: nil, geo: geo)
+                                }.onEnded{val in
+                                    lastScaleValue = 1
+                                })
+                                .simultaneousGesture(
+                                    DragGesture()
+                                        .onChanged { value in
+                                            
+                                            dragChanged(value: value, geo: geo)
+                                        }
+                                        .onEnded { value in
+                                            
+                                            let maxDragDistanceX = geo.size.width * scale - geo.size.width
+                                            let maxDragDistanceY = geo.size.height * scale - geo.size.height
+                                            
+                                            // Update the current offset within constraints and reset drag offset
+                                            currentOffset.width = max(min(currentOffset.width + dragOffset.width, maxDragDistanceX), -maxDragDistanceX)
+                                            currentOffset.height = max(min(currentOffset.height + dragOffset.height, maxDragDistanceY), -maxDragDistanceY)
+                                            
+                                            dragOffset = CGSize.zero
+                                        }
+                                )
+                        })
                 }
             }
-        }
+            
+            .onAppear() {
+                coordinator.player.play(url)
+            }
+            .onDisappear() {
+                coordinator.player.stop()
+            }
+            
+            .onChange(of: roomModel.hlsVariants) { variant in
+                if self.url == nil {
+                    if let url = variant.first?.url {
+                        coordinator.player.play(url)
+                    }
+                }
+            }
+            Spacer().frame(height: HMSPlayerConstants.seekBarPadding)
+        }.overlay(content: {
+            videoOverlay?(coordinator.player)
+        })
     }
     
     private func dragChanged(value: DragGesture.Value?, geo: GeometryProxy) {
