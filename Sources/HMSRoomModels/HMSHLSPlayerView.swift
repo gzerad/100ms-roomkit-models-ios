@@ -41,6 +41,15 @@ class AVPlayerModel {
     weak var currentAVPlayerInstance: AVPlayerViewController?
 }
 
+public struct HMSPlayerConstants {
+    static let seekBarPadding: CGFloat = 4
+    
+    public static func preferredHeight(for width: CGFloat) -> CGFloat {
+        return (width * 9) / 16 + HMSPlayerConstants.seekBarPadding
+    }
+}
+
+
 public struct HMSHLSPlayerView<VideoOverlay> : View where VideoOverlay : View {
     
     class Coordinator: HMSHLSPlayerDelegate, ObservableObject {
@@ -132,23 +141,23 @@ public struct HMSHLSPlayerView<VideoOverlay> : View where VideoOverlay : View {
     }
     
     func videoView(url: URL) -> some View {
-        GeometryReader { geo in
-            
-            ZStack {
-                HMSHLSViewRepresentable(player: coordinator.player, tapBlock: {
-                    hlsPlayerPreferences.isControlsHidden.wrappedValue.toggle()
-                    
-                    if !hlsPlayerPreferences.isControlsHidden.wrappedValue {
-                        hideTasks.append(hideControlsTask)
-                    }
-                    else {
-                        hideTasks.forEach{$0.cancel()}
-                        hideTasks.removeAll()
-                    }
-                    
-                    // hide keyboard it it's present
-                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                })
+        VStack {
+            GeometryReader { geo in
+                ZStack {
+                    HMSHLSViewRepresentable(player: coordinator.player, tapBlock: {
+                        hlsPlayerPreferences.isControlsHidden.wrappedValue.toggle()
+                        
+                        if !hlsPlayerPreferences.isControlsHidden.wrappedValue {
+                            hideTasks.append(hideControlsTask)
+                        }
+                        else {
+                            hideTasks.forEach{$0.cancel()}
+                            hideTasks.removeAll()
+                        }
+                        
+                        // hide keyboard it it's present
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    })
                     .frame(width: geo.size.width, height: geo.size.height )
                     .onAppear() {
                         hideTasks.append(hideControlsTask)
@@ -168,47 +177,26 @@ public struct HMSHLSPlayerView<VideoOverlay> : View where VideoOverlay : View {
                             hideTasks.append(hideControlsTask)
                         }
                     }
-            }
-        }
-        .overlay(content: {
-            videoOverlay?(coordinator.player)
-        })
-        .onAppear() {
-            coordinator.player.play(url)
-        }
-        .onDisappear() {
-            coordinator.player.stop()
-        }
-        
-        .onChange(of: roomModel.hlsVariants) { variant in
-            if self.url == nil {
-                if let url = variant.first?.url {
-                    coordinator.player.play(url)
                 }
             }
+            .onAppear() {
+                coordinator.player.play(url)
+            }
+            .onDisappear() {
+                coordinator.player.stop()
+            }
+            
+            .onChange(of: roomModel.hlsVariants) { variant in
+                if self.url == nil {
+                    if let url = variant.first?.url {
+                        coordinator.player.play(url)
+                    }
+                }
+            }
+            Spacer().frame(height: HMSPlayerConstants.seekBarPadding)
+        }.overlay {
+            videoOverlay?(coordinator.player)
         }
-    }
-    
-    private func dragChanged(value: DragGesture.Value?, geo: GeometryProxy) {
-        
-        let maxDragDistanceX = geo.size.width * scale - geo.size.width
-        let maxDragDistanceY = geo.size.height * scale - geo.size.height
-        
-        // Calculate and constrain the drag offset
-        let dragX = max(min((value?.translation.width ?? 0) + currentOffset.width, maxDragDistanceX), -maxDragDistanceX)
-        let dragY = max(min((value?.translation.height ?? 0) + currentOffset.height, maxDragDistanceY), -maxDragDistanceY)
-        
-        var x = dragX - currentOffset.width
-        var y = dragY - currentOffset.height
-        
-        if currentOffset.width + x > 0 {
-            x = self.dragOffset.width
-        }
-        if currentOffset.height + y > 0 {
-            y = self.dragOffset.height
-        }
-        
-        self.dragOffset = CGSize(width: x, height: y)
     }
     
     public func onCue(cue: @escaping (HMSHLSCue)->Void) -> HMSHLSPlayerView {
